@@ -1,0 +1,18 @@
+## Trade-Off Analysis: Re-Ranking Post-Processing Layer
+
+**Configuration:** 1,000 candidates, blend weights 0.5/0.3/0.2, MMR λ = 0.5, 2-of-10 new-creator quota. Diversity is normalized Shannon entropy across 8 embedding clusters; NDCG@10 uses `base_score` as graded relevance.
+
+| Stage | NDCG@10 | Diversity entropy | New-creator ratio |
+|---|---|---|---|
+| Baseline (relevance only) | 1.000 | 0.815 | 0% |
+| + MMR (λ = 0.5) | 0.982 | 0.815 | 0% |
+| + Creator fairness | 0.977 | 0.907 | 20% |
+
+**The trade-off.** The full layer gives up 2.3 points of NDCG@10 (1.8 from MMR, 0.5 from fairness) for an 11% entropy gain and new-creator exposure rising from zero to the 20% quota. The cost stays small because NDCG discounts each rank by 1/log2(rank + 1). The fairness swap replaced only ranks 9 and 10, which carry about 0.30 and 0.29 of rank 1's weight, so the relevance gap of the promoted items (0.886 and 0.867 versus 0.905 and 0.921) is heavily discounted.
+
+**What the λ sweep shows.**
+- At λ = 0.5, MMR alone changed 3 of 10 items but left cluster coverage unchanged; the entropy gain came from the fairness swap.
+- The curve is non-linear. NDCG stays above 0.976 for λ ≤ 0.5, then falls steeply (0.924 at 0.6, 0.869 at 0.7, 0.664 at 1.0). Entropy peaks at λ = 0.7 (0.974) and declines after, because pure dissimilarity chases outliers instead of spreading across clusters, so λ > 0.7 is worse on both axes.
+- Fairness is not the same as diversity: at λ = 0 the quota lowered entropy (0.815 to 0.774), while at λ ≥ 0.9 it raised NDCG by replacing weak diversity picks with stronger new-creator items.
+
+**Recommendation:** operate at λ = 0.4–0.5, the knee of the curve, where quota compliance and the entropy gain cost under 2.5 NDCG points.
