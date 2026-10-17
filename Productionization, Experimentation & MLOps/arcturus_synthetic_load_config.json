@@ -1,0 +1,15 @@
+{
+  "qps_target": 100,
+  "stress_test_duration_sec": 300,
+  "total_simulated_requests": 30000,
+  "covariate_shift_start_request": 15000,
+  "covariate_shift_row_count": 10000,
+  "psi_threshold": 0.25,
+  "psi_check_interval_requests": 500,
+  "psi_rolling_window_size": 1000,
+  "p95_latency_sla_ms": 50,
+  "redis_cache_miss_rate": 0.05,
+  "feature_columns": ["recency", "freshness", "trending", "ctr_7d", "watch_time_avg", "user_engagement_score"],
+  "shifted_feature_column": "user_engagement_score",
+  "notes": "total_simulated_requests corresponds to qps_target x stress_test_duration_sec (100 x 300). The harness processes this many requests as fast as possible rather than rate-limiting to real wall-clock QPS, since this is a bounded synthetic load test, not a live traffic replay."
+}

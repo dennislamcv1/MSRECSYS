@@ -1,0 +1,20 @@
+Contoso — Production Pipeline Architecture
+Executive Summary
+
+Author: Dennis Lam
+Date: October 17, 2026
+Pipeline Version: 1.0.0
+
+1. Architecture Overview
+Contoso's Arcturus recommendation pipeline had four components built in isolation and never tested together under load. Layer 1 hydrates features from Azure Cache for Redis, falling back to the Delta feature store on misses. Layer 2 registers retrained models with Azure ML SDK v2 and deploys them to a Managed Online Endpoint. Layer 3 compares a rolling window of served features with the Delta baseline using PSI, triggering the Databricks Jobs API past threshold. Layer 4 logs latency, cache, drift and engagement telemetry to MLflow, closing one automated loop from serving to redeployment.
+
+2. Stress Test Results
+The harness processed all 30,000 requests, the 100 QPS × 300-second volume, in 4.5 seconds on a single kernel. p95 serving latency was 0.3071 ms against the 50 ms SLA, with a cache miss rate of 0.0493. Before the shift, PSI never exceeded 0.0145. The first check inside the 10,000-row shift scored 2.2366 and triggered retraining job 6ef0507f-prod-retrain 500 requests after injection; PSI peaked at 9.7172, then fell back to 0.0145. Twenty-one checks breached 0.25, yet only one job fired. Both acceptance criteria were met.
+
+3. Cost vs. Latency Trade-Off Defense
+The Redis configuration I am defending is sized for memory, not throughput: hold enough of the serving corpus to keep misses at or below 5%. The run supports that. Cache hits had a p50 of 0.0533 ms against 0.4471 ms for the feature-store fallback, 8.4 times slower. With misses at 0.0493, p95 (0.3071 ms) sits at the boundary between the hit and miss distributions, so a cheaper, smaller cache that let misses pass 5% would push p95 onto the fallback path. Throughput gives no case for a premium tier: the path cleared 6,613 requests per second, 66 times the 100 QPS target, with p95 163 times under the SLA. I would choose the smallest replicated tier whose memory holds the hot set.
+
+I kept the PSI threshold at 0.25 because the margins are wide on both sides: the noise floor peaked at 0.0145, while the first shifted check scored 2.2366. A lower threshold would not have caught this shift sooner, since detection already came within one 500-request interval, but it would raise false-retrain exposure, and every trigger costs a Databricks job plus an endpoint redeployment; the fire-once guard held 21 breaches to one job. On cost, the 50 ms target is not what drives spend: even the fallback's p95 of 0.7642 ms still passes it. That fallback is in-memory, however, so I would not drop the cache for the cheaper cache-less design until real Delta reads are measured.
+
+4. Production Readiness Assessment
+The pipeline meets both acceptance criteria as the harness defines them: p95 latency of 0.3071 ms against a 50 ms SLA, and an automatic retraining trigger 500 requests into the 10,000-row shift, so I recommend proceeding with the deployment window. The single highest residual risk is drift the loop cannot see. Only user_engagement_score is monitored, so a shift in the other five features would degrade recommendations without triggering retraining. In the first 30 days I would monitor PSI on all six columns at the same 0.25 threshold.
